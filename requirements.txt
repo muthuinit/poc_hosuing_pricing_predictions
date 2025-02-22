@@ -5,3 +5,4 @@ xgboost
 google-cloud-storage
 joblib
 google-cloud-aiplatform
+fsspec

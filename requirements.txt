@@ -6,4 +6,4 @@ google-cloud-storage
 joblib
 google-cloud-aiplatform
 fsspec
-gcsfs==2024.6.2
+gcsfs

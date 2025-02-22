@@ -45,8 +45,17 @@ jobs:
             --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,container-image-uri=python:3.9-slim \
             --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
 
-      - name: Deploy Model to Vertex AI Endpoint
+      - name: Verify Model File in GCS
         run: |
+          # Check if the model file exists in GCS
+          if ! gsutil ls gs://housing-data-bucket-poc/models/model.joblib; then
+            echo "Model file not found in GCS. Please check the training step."
+            exit 1
+          fi
+
+      - name: Upload Model to Vertex AI
+        run: |
+          # Upload the model to Vertex AI
           MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
           if [ -z "$MODEL_ID" ]; then
             gcloud ai models upload \
@@ -57,6 +66,9 @@ jobs:
               --artifact-uri=gs://housing-data-bucket-poc/models
           fi
 
+      - name: Create or Get Vertex AI Endpoint
+        run: |
+          # Create or get the endpoint
           ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
           if [ -z "$ENDPOINT_ID" ]; then
             gcloud ai endpoints create \
@@ -65,6 +77,12 @@ jobs:
               --display-name=house-prediction-endpoint
           fi
 
+      - name: Deploy Model to Vertex AI Endpoint
+        run: |
+          # Deploy the model to the endpoint
+          ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
+          MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
+          
           gcloud ai endpoints deploy-model $ENDPOINT_ID \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=us-central1 \
@@ -76,6 +94,7 @@ jobs:
 
       - name: Test Vertex AI Endpoint
         run: |
+          # Test the endpoint
           ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
           python -c "
           from google.cloud import aiplatform

@@ -42,7 +42,7 @@ jobs:
             --display-name=house-prediction-job \
             --python-package-uris=gs://housing-data-bucket-poc/house_prediction.py \
             --service-account=cloud-microservices-pocsa@sixth-utility-449722-p8.iam.gserviceaccount.com \
-            --worker-pool-spec=machine-type=n1-standard-8,replica-count=1,container-image-uri=python:3.9-slim \
+            --worker-pool-spec=machine-type=n1-highmem-16,replica-count=1,container-image-uri=python:3.9-slim \
             --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
 
       - name: Verify Model File in GCS

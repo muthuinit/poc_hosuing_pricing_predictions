@@ -1,0 +1,99 @@
+name: Vertex AI Pipeline
+
+on:
+  push:
+    branches:
+      - main  # Trigger the workflow on push to the main branch
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Upload Dataset to GCS
+        run: |
+          gsutil cp Housing.csv gs://housing-data-bucket-poc/Housing.csv
+
+      - name: Train Model with Vertex AI Custom Job
+        run: |
+          gcloud ai custom-jobs create \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=us-central1 \
+            --display-name=house-prediction-job \
+            --python-package-uris=gs://housing-data-bucket-poc/house_prediction.py \
+            --service-account=cloud-microservices-pocsa@sixth-utility-449722-p8.iam.gserviceaccount.com \
+            --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,container-image-uri=python:3.9-slim \
+            --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
+
+      - name: Deploy Model to Vertex AI Endpoint
+        run: |
+          MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
+          if [ -z "$MODEL_ID" ]; then
+            gcloud ai models upload \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --region=us-central1 \
+              --display-name=house-prediction-model \
+              --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-0:latest \
+              --artifact-uri=gs://housing-data-bucket-poc/models
+          fi
+
+          ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
+          if [ -z "$ENDPOINT_ID" ]; then
+            gcloud ai endpoints create \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --region=us-central1 \
+              --display-name=house-prediction-endpoint
+          fi
+
+          gcloud ai endpoints deploy-model $ENDPOINT_ID \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=us-central1 \
+            --model=$MODEL_ID \
+            --display-name=house-prediction-model \
+            --machine-type=n1-standard-4 \
+            --min-replica-count=1 \
+            --max-replica-count=1
+
+      - name: Test Vertex AI Endpoint
+        run: |
+          ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
+          python -c "
+          from google.cloud import aiplatform
+          endpoint = aiplatform.Endpoint('projects/${{ secrets.GCP_PROJECT_ID }}/locations/us-central1/endpoints/$ENDPOINT_ID')
+          new_data = {
+              'log_area': [8.5, 9.0, 7.8],
+              'bedrooms': [3, 4, 2],
+              'bathrooms': [2, 3, 1],
+              'stories': [2, 3, 1],
+              'parking': [1, 2, 0],
+              'mainroad': ['yes', 'yes', 'no'],
+              'guestroom': ['no', 'yes', 'no'],
+              'basement': ['no', 'yes', 'no'],
+              'hotwaterheating': ['no', 'no', 'no'],
+              'airconditioning': ['yes', 'yes', 'no'],
+              'prefarea': ['yes', 'no', 'no'],
+              'furnishingstatus': ['furnished', 'semi-furnished', 'unfurnished']
+          }
+          response = endpoint.predict(instances=[new_data])
+          print(response.predictions)
+          "

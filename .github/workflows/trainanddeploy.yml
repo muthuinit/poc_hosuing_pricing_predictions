@@ -12,15 +12,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Set up Docker
+        id: docker
+        uses: docker/setup-buildx-action@v2
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
@@ -30,19 +24,18 @@ jobs:
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Upload Dataset to GCS
+      - name: Build and Push Docker Image
         run: |
-          gsutil cp Housing.csv gs://housing-data-bucket-poc/Housing.csv
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest .
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest
 
-      - name: Train Model with Vertex AI Custom Job
+      - name: Train Model with Vertex AI Custom Job (Docker)
         run: |
           gcloud ai custom-jobs create \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=us-central1 \
             --display-name=house-prediction-job \
-            --python-package-uris=gs://housing-data-bucket-poc/house_prediction.py \
-            --service-account=cloud-microservices-pocsa@sixth-utility-449722-p8.iam.gserviceaccount.com \
-            --worker-pool-spec=machine-type=n1-highmem-16,replica-count=1,container-image-uri=python:3.9-slim \
+            --worker-pool-spec=machine-type=n1-standard-8,replica-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest \
             --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
 
       - name: Verify Model File in GCS

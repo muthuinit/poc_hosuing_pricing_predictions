@@ -39,7 +39,7 @@ jobs:
           docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest .
           docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest
 
-      # Step 7: Run Vertex AI Custom Training Job
+      # Step 7: Submit Vertex AI Custom Job with Service Account
       - name: Train Model with Vertex AI Custom Job (Docker)
         run: |
           gcloud ai custom-jobs create \
@@ -47,6 +47,7 @@ jobs:
             --region=us-central1 \
             --display-name=house-prediction-job \
             --worker-pool-spec=machine-type=n1-standard-16,replica-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest \
+            --service-account=cloud-microservices-pocsa@sixth-utility-449722-p8.iam.gserviceaccount.com \
             --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
 
       # Step 8: Verify Model File in GCS

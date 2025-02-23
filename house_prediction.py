@@ -129,17 +129,26 @@ def save_model(model, model_dir):
         logger.info(f"Model saved locally: {local_model_path}")
 
         # Parse the GCS path
-        if model_dir.startswith("gs://"):
-            model_dir = model_dir[5:]  # Remove 'gs://'
+        if not model_dir.startswith("gs://"):
+            raise ValueError(f"Invalid GCS path: {model_dir}. Must start with 'gs://'.")
+        
+        model_dir = model_dir[5:]  # Remove 'gs://'
         bucket_name, *blob_path = model_dir.split("/", 1)
         blob_path = blob_path[0] if blob_path else "model.joblib"
+
+        logger.info(f"Uploading model to GCS: gs://{bucket_name}/{blob_path}")
 
         # Upload to GCS
         client = storage.Client()
         bucket = client.bucket(bucket_name)
+
+        # Check if the bucket exists
+        if not bucket.exists():
+            raise ValueError(f"GCS bucket does not exist: {bucket_name}")
+
         blob = bucket.blob(blob_path)
         blob.upload_from_filename(local_model_path)
-        logger.info(f"Model saved to GCS: gs://{bucket_name}/{blob_path}")
+        logger.info(f"Model successfully saved to GCS: gs://{bucket_name}/{blob_path}")
     except Exception as e:
         logger.error(f"Error saving model: {e}")
         raise

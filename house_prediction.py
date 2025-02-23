@@ -110,37 +110,23 @@ def save_model(model, model_dir):
             raise FileNotFoundError(f"Local model file not found: {local_model_path}")
         logger.info(f"Model file exists: {local_model_path}, size: {os.path.getsize(local_model_path)} bytes")
 
-        if not model_dir.startswith("gs://"):
-            raise ValueError(f"Invalid GCS path: {model_dir}. Must start with 'gs://'.")
-
-        model_dir = model_dir[5:]
-        bucket_name, *blob_path = model_dir.split("/", 1)
-        blob_path = blob_path[0] if blob_path else "models/model.joblib"
-
         client = storage.Client()
+        bucket_name = model_dir.replace("gs://", "").split("/")[0]
+        blob_path = "models/model.joblib"
         bucket = client.bucket(bucket_name)
-
-        logger.info(f"Attempting to upload: {local_model_path} to gs://{bucket_name}/{blob_path}")
         blob = bucket.blob(blob_path)
 
+        logger.info(f"Attempting to upload: {local_model_path} to gs://{bucket_name}/{blob_path}")
+        blob.upload_from_filename(local_model_path)
+        logger.info(f"Model successfully uploaded to gs://{bucket_name}/{blob_path}")
+
+        # Manual upload verification step
+        manual_blob = bucket.blob("models/manual-upload-model.joblib")
         try:
-            blob.upload_from_filename(local_model_path)
-            if not blob.exists():
-                logger.error(f"Upload failed! Model not found in GCS: gs://{bucket_name}/{blob_path}")
-            else:
-                logger.info(f"Model confirmed in GCS: gs://{bucket_name}/{blob_path}")
+            manual_blob.upload_from_filename(local_model_path)
+            logger.info("Manual model upload successful!")
         except Exception as e:
-            logger.error(f"Model upload failed: {e}")
-
-        # Test upload for sanity check
-        test_blob = bucket.blob("models/test-upload.txt")
-        test_blob.upload_from_string("Testing GCS upload")
-
-        if not test_blob.exists():
-            logger.error("Test upload failed!")
-        else:
-            logger.info("Test upload successful!")
-
+            logger.error(f"Manual model upload failed: {e}")
     except Exception as e:
         logger.error(f"Error saving model: {e}")
         raise

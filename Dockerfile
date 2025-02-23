@@ -11,14 +11,8 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Copy the script and dataset
+# Copy the script
 COPY house_prediction.py .
-
-# Copy the service account key
-COPY service-account-key.json /app/service-account-key.json
-
-# Set the environment variable for Google Cloud authentication
-ENV GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
 
 # Set the entry point to run the script
 ENTRYPOINT ["python", "house_prediction.py"]

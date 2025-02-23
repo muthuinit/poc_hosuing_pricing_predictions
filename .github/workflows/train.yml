@@ -1,0 +1,51 @@
+name: Train Model
+
+on:
+  push:
+    branches:
+      - main  # Trigger the workflow on push to the main branch
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker
+        id: docker
+        uses: docker/setup-buildx-action@v2
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Authenticate Docker to GCR
+        run: |
+          gcloud auth configure-docker
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest .
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest
+
+      - name: Train Model with Vertex AI Custom Job (Docker)
+        run: |
+          gcloud ai custom-jobs create \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=us-central1 \
+            --display-name=house-prediction-job \
+            --worker-pool-spec=machine-type=n1-standard-16,replica-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest \
+            --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
+
+      - name: Verify Model File in GCS
+        run: |
+          # Check if the model file exists in GCS
+          if ! gsutil ls gs://housing-data-bucket-poc/models/model.joblib; then
+            echo "Model file not found in GCS. Please check the training step."
+            exit 1
+          fi

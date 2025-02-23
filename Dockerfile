@@ -11,9 +11,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Copy the training script and dataset
+# Copy the script and dataset
 COPY house_prediction.py .
 COPY Housing.csv .
 
-# Set the entry point for the container
-ENTRYPOINT ["python", "house_prediction.py"]
+# Command to run the script
+CMD ["python", "house_prediction.py", "--data_path", "Housing.csv", "--model_dir", "gs://your-bucket-name/path/to/model"]

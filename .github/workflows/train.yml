@@ -45,7 +45,18 @@ jobs:
             --format="value(name)")
 
           echo "Streaming logs for job $JOB_ID..."
-          gcloud ai custom-jobs stream-logs $JOB_ID --region=us-central1
+          gcloud ai custom-jobs stream-logs $JOB_ID --region=us-central1 || exit 1
+
+          JOB_STATE=$(gcloud ai custom-jobs describe $JOB_ID --region=us-central1 --format="value(state)")
+
+          echo "Job state: $JOB_STATE"
+
+          if [[ "$JOB_STATE" != "SUCCEEDED" ]]; then
+            echo "Job did not succeed. Exiting workflow."
+            exit 1
+          fi
+
+          echo "Training job completed successfully."
 
       - name: Verify Model File in GCS
         run: |

@@ -2,7 +2,7 @@ name: Deploy Model
 
 on:
   workflow_run:
-    workflows: ["Train Model"]  # Trigger this workflow after the "Train Model" workflow completes
+    workflows: ["Train Model1"]  # Trigger this workflow after the "Train Model" workflow completes
     types:
       - completed
 

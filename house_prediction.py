@@ -10,6 +10,7 @@ from xgboost import XGBRegressor
 import joblib
 from google.cloud import storage
 import logging
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -122,6 +123,11 @@ def save_model(model, model_dir):
         local_model_path = "model.joblib"
         joblib.dump(model, local_model_path)
 
+        # Check if the local file exists
+        if not os.path.exists(local_model_path):
+            raise FileNotFoundError(f"Local model file not found: {local_model_path}")
+        logger.info(f"Model saved locally: {local_model_path}")
+
         # Parse the GCS path
         if model_dir.startswith("gs://"):
             model_dir = model_dir[5:]  # Remove 'gs://'
@@ -141,8 +147,13 @@ def save_model(model, model_dir):
 # Main function
 def main():
     try:
+        # Load the dataset
         df = load_data(args.data_path)
+
+        # Train the model
         model = train_model(df)
+
+        # Save the model
         save_model(model, args.model_dir)
     except Exception as e:
         logger.error(f"Error in main function: {e}")

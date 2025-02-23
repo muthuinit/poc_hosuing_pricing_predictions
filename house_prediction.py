@@ -120,14 +120,17 @@ def save_model(model, model_dir):
         client = storage.Client()
         bucket = client.bucket(bucket_name)
 
-        logger.info(f"Attempting to upload to: gs://{bucket_name}/{blob_path}")
+        logger.info(f"Attempting to upload: {local_model_path} to gs://{bucket_name}/{blob_path}")
         blob = bucket.blob(blob_path)
-        blob.upload_from_filename(local_model_path)
 
-        if not blob.exists():
-            logger.error(f"Upload failed! Model not found at: gs://{bucket_name}/{blob_path}")
-        else:
-            logger.info(f"Model confirmed in GCS: gs://{bucket_name}/{blob_path}")
+        try:
+            blob.upload_from_filename(local_model_path)
+            if not blob.exists():
+                logger.error(f"Upload failed! Model not found in GCS: gs://{bucket_name}/{blob_path}")
+            else:
+                logger.info(f"Model confirmed in GCS: gs://{bucket_name}/{blob_path}")
+        except Exception as e:
+            logger.error(f"Model upload failed: {e}")
 
         # Test upload for sanity check
         test_blob = bucket.blob("models/test-upload.txt")

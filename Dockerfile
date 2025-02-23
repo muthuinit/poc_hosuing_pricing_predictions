@@ -11,6 +11,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
+# Show Python and package versions for debugging
+RUN python --version && pip freeze
+
 # Copy the script
 COPY house_prediction.py .
 

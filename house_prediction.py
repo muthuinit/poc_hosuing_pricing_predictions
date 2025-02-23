@@ -26,7 +26,6 @@ args = parser.parse_args()
 def load_data(data_path):
     try:
         if data_path.startswith("gs://"):
-            # Load data from GCS
             from google.cloud import storage
             import io
 
@@ -37,7 +36,6 @@ def load_data(data_path):
             data = blob.download_as_text()
             df = pd.read_csv(io.StringIO(data))
         else:
-            # Load data from local path
             df = pd.read_csv(data_path)
         
         df.dropna(inplace=True)
@@ -49,17 +47,14 @@ def load_data(data_path):
 # Train model
 def train_model(df):
     try:
-        # Remove outliers using IQR
         Q1, Q3 = df["price"].quantile([0.25, 0.75])
         IQR = Q3 - Q1
         lower_bound, upper_bound = Q1 - 1.5 * IQR, Q3 + 1.5 * IQR
         df_cleaned = df[(df["price"] >= lower_bound) & (df["price"] <= upper_bound)].copy()
 
-        # Check if 'area' column exists and has valid values
         if "area" not in df_cleaned.columns or (df_cleaned["area"] <= 0).any():
             raise ValueError("The 'area' column is missing or contains invalid values (<= 0).")
 
-        # Feature engineering
         df_cleaned["log_area"] = np.log(df_cleaned["area"])
         features = ["log_area", "bedrooms", "bathrooms", "stories", "parking",
                     "mainroad", "guestroom", "basement", "hotwaterheating",
@@ -69,7 +64,6 @@ def train_model(df):
         X = df_cleaned[features]
         y = target
 
-        # Preprocessing
         preprocessor = ColumnTransformer(
             transformers=[
                 ("num", StandardScaler(), ["log_area", "bathrooms", "bedrooms", "stories", "parking"]),
@@ -78,7 +72,6 @@ def train_model(df):
             ]
         )
 
-        # Pipeline
         pipeline = Pipeline(
             steps=[
                 ("preprocessor", preprocessor),
@@ -86,7 +79,6 @@ def train_model(df):
             ]
         )
 
-        # Hyperparameter tuning
         param_grid = {
             "regressor__n_estimators": [100, 200, 500],
             "regressor__learning_rate": [0.01, 0.05, 0.1],
@@ -95,21 +87,13 @@ def train_model(df):
             "regressor__colsample_bytree": [0.8, 1.0]
         }
 
-        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        kf = KFold(n_splits=min(5, len(df_cleaned)), shuffle=True, random_state=42)
         grid_search = GridSearchCV(pipeline, param_grid, cv=kf, scoring="neg_mean_squared_error", verbose=1)
         grid_search.fit(X, y)
 
-        # Best model
         best_model = grid_search.best_estimator_
         logger.info(f"Best hyperparameters: {grid_search.best_params_}")
         logger.info(f"Best score (neg MSE): {grid_search.best_score_}")
-
-        # Evaluate the model
-        y_pred = best_model.predict(X)
-        mae = mean_absolute_error(y, y_pred)
-        mse = mean_squared_error(y, y_pred)
-        r2 = r2_score(y, y_pred)
-        logger.info(f"Model Evaluation - MAE: {mae}, MSE: {mse}, R2: {r2}")
 
         return best_model
     except Exception as e:
@@ -119,36 +103,29 @@ def train_model(df):
 # Save model to GCS
 def save_model(model, model_dir):
     try:
-        # Save the model locally
         local_model_path = "model.joblib"
-        joblib.dump(model, local_model_path)
+        joblib.dump(model, local_model_path, protocol=4)
 
-        # Check if the local file exists
         if not os.path.exists(local_model_path):
             raise FileNotFoundError(f"Local model file not found: {local_model_path}")
-        logger.info(f"Model saved locally: {local_model_path}")
+        logger.info(f"Model file exists: {local_model_path}, size: {os.path.getsize(local_model_path)} bytes")
 
-        # Parse the GCS path
         if not model_dir.startswith("gs://"):
             raise ValueError(f"Invalid GCS path: {model_dir}. Must start with 'gs://'.")
-        
-        model_dir = model_dir[5:]  # Remove 'gs://'
+
+        model_dir = model_dir[5:]
         bucket_name, *blob_path = model_dir.split("/", 1)
         blob_path = blob_path[0] if blob_path else "model.joblib"
 
-        logger.info(f"Uploading model to GCS: gs://{bucket_name}/{blob_path}")
-
-        # Upload to GCS
         client = storage.Client()
         bucket = client.bucket(bucket_name)
 
-        # Check if the bucket exists
         if not bucket.exists():
             raise ValueError(f"GCS bucket does not exist: {bucket_name}")
 
         blob = bucket.blob(blob_path)
         blob.upload_from_filename(local_model_path)
-        logger.info(f"Model successfully saved to GCS: gs://{bucket_name}/{blob_path}")
+        logger.info(f"Model successfully uploaded to gs://{bucket_name}/{blob_path}")
     except Exception as e:
         logger.error(f"Error saving model: {e}")
         raise
@@ -156,13 +133,8 @@ def save_model(model, model_dir):
 # Main function
 def main():
     try:
-        # Load the dataset
         df = load_data(args.data_path)
-
-        # Train the model
         model = train_model(df)
-
-        # Save the model
         save_model(model, args.model_dir)
     except Exception as e:
         logger.error(f"Error in main function: {e}")

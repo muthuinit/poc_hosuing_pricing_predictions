@@ -7,3 +7,4 @@ joblib
 google-cloud-aiplatform
 fsspec
 gcsfs
+scikit-learn==1.6.1

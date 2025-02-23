@@ -68,7 +68,7 @@ def train_model(df):
 
     n_splits = min(5, len(df_cleaned))  # Ensure we never have more splits than data points
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    grid_search = GridSearchCV(pipeline, param_grid, cv=kf, scoring="neg_mean_squared_error", verbose=1)
+    grid_search = GridSearchCV(pipeline, param_grid, cv=kf, scoring="neg_mean_squared_error", verbose=1, n_jobs=1)
     grid_search.fit(X, y)
 
     # Best model

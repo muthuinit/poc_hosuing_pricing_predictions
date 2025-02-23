@@ -40,7 +40,8 @@ jobs:
             --region=us-central1 \
             --display-name=house-prediction-job \
             --worker-pool-spec=machine-type=n1-standard-16,replica-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest \
-            --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
+            --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models" \
+            --sync
 
       - name: Verify Model File in GCS
         run: |
@@ -79,7 +80,7 @@ jobs:
           # Deploy the model to the endpoint
           ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
           MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
-          
+
           gcloud ai endpoints deploy-model $ENDPOINT_ID \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=us-central1 \

@@ -1,4 +1,4 @@
-name: Train Model
+name: Train and Deploy Model to Vertex AI
 
 on:
   push:
@@ -6,14 +6,13 @@ on:
       - main
 
 jobs:
-  train:
+  train-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
-        id: docker
         uses: docker/setup-buildx-action@v2
 
       - name: Authenticate to Google Cloud
@@ -45,18 +44,21 @@ jobs:
             --format="value(name)")
 
           echo "Streaming logs for job $JOB_ID..."
-          gcloud ai custom-jobs stream-logs $JOB_ID --region=us-central1 || exit 1
+          gcloud ai custom-jobs stream-logs $JOB_ID --region=us-central1 &
 
-          JOB_STATE=$(gcloud ai custom-jobs describe $JOB_ID --region=us-central1 --format="value(state)")
+          while true; do
+            JOB_STATE=$(gcloud ai custom-jobs describe $JOB_ID --region=us-central1 --format="value(state)")
+            echo "Current job state: $JOB_STATE"
 
-          echo "Job state: $JOB_STATE"
-
-          if [[ "$JOB_STATE" != "SUCCEEDED" ]]; then
-            echo "Job did not succeed. Exiting workflow."
-            exit 1
-          fi
-
-          echo "Training job completed successfully."
+            if [[ "$JOB_STATE" == "SUCCEEDED" ]]; then
+              echo "Training job completed successfully."
+              break
+            elif [[ "$JOB_STATE" == "FAILED" || "$JOB_STATE" == "CANCELLED" ]]; then
+              echo "Training job did not succeed. Exiting workflow."
+              exit 1
+            fi
+            sleep 30
+          done
 
       - name: Verify Model File in GCS
         run: |
@@ -64,3 +66,60 @@ jobs:
             echo "Model file not found in GCS. Please check the training step."
             exit 1
           fi
+
+      - name: Upload Model to Vertex AI
+        run: |
+          gcloud ai models upload \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=us-central1 \
+            --display-name=house-prediction-model \
+            --artifact-uri=gs://housing-data-bucket-poc/models/ \
+            --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-0:latest
+
+      - name: Create Vertex AI Endpoint
+        run: |
+          ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
+          if [ -z "$ENDPOINT_ID" ]; then
+            gcloud ai endpoints create \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --region=us-central1 \
+              --display-name=house-prediction-endpoint
+          fi
+
+      - name: Deploy Model to Endpoint
+        run: |
+          ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
+          MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
+
+          gcloud ai endpoints deploy-model $ENDPOINT_ID \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=us-central1 \
+            --model=$MODEL_ID \
+            --display-name=house-prediction-model \
+            --machine-type=n1-standard-4 \
+            --min-replica-count=1 \
+            --max-replica-count=1
+
+      - name: Test Vertex AI Endpoint
+        run: |
+          ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
+          python -c "
+          from google.cloud import aiplatform
+          endpoint = aiplatform.Endpoint('projects/${{ secrets.GCP_PROJECT_ID }}/locations/us-central1/endpoints/$ENDPOINT_ID')
+          new_data = {
+              'log_area': [8.5, 9.0, 7.8],
+              'bedrooms': [3, 4, 2],
+              'bathrooms': [2, 3, 1],
+              'stories': [2, 3, 1],
+              'parking': [1, 2, 0],
+              'mainroad': ['yes', 'yes', 'no'],
+              'guestroom': ['no', 'yes', 'no'],
+              'basement': ['no', 'yes', 'no'],
+              'hotwaterheating': ['no', 'no', 'no'],
+              'airconditioning': ['yes', 'yes', 'no'],
+              'prefarea': ['yes', 'no', 'no'],
+              'furnishingstatus': ['furnished', 'semi-furnished', 'unfurnished']
+          }
+          response = endpoint.predict(instances=[new_data])
+          print(response.predictions)
+          "

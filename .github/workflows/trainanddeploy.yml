@@ -43,27 +43,23 @@ jobs:
             --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models" \
             --format="value(name)")
 
-          echo "Waiting for job $JOB_ID to complete..."
+          echo "Streaming logs for job $JOB_ID..."
 
-          # Poll the job status
-          while true; do
-            STATUS=$(gcloud ai custom-jobs describe $JOB_ID \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --region=us-central1 \
-              --format="value(state)")
+          # Stream logs and wait for job completion
+          gcloud ai custom-jobs stream-logs $JOB_ID \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=us-central1
 
-            echo "Current job status: $STATUS"
+          # Check final job state
+          STATUS=$(gcloud ai custom-jobs describe $JOB_ID \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=us-central1 \
+            --format="value(state)")
 
-            if [[ "$STATUS" == "SUCCEEDED" ]]; then
-              echo "Training job completed successfully!"
-              break
-            elif [[ "$STATUS" == "FAILED" || "$STATUS" == "CANCELLED" ]]; then
-              echo "Training job failed or was cancelled!"
-              exit 1
-            fi
-
-            sleep 60  # Wait 1 minute before checking again
-          done
+          if [[ "$STATUS" == "JOB_STATE_FAILED" || "$STATUS" == "JOB_STATE_CANCELLED" ]]; then
+            echo "Training job failed or was cancelled!"
+            exit 1
+          fi
 
       - name: Verify Model File in GCS
         run: |

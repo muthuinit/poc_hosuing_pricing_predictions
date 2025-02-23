@@ -35,13 +35,35 @@ jobs:
 
       - name: Train Model with Vertex AI Custom Job (Docker)
         run: |
-          gcloud ai custom-jobs create \
+          JOB_ID=$(gcloud ai custom-jobs create \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=us-central1 \
             --display-name=house-prediction-job \
             --worker-pool-spec=machine-type=n1-standard-16,replica-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest \
             --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models" \
-            --sync
+            --format="value(name)")
+
+          echo "Waiting for job $JOB_ID to complete..."
+
+          # Poll the job status
+          while true; do
+            STATUS=$(gcloud ai custom-jobs describe $JOB_ID \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --region=us-central1 \
+              --format="value(state)")
+
+            echo "Current job status: $STATUS"
+
+            if [[ "$STATUS" == "SUCCEEDED" ]]; then
+              echo "Training job completed successfully!"
+              break
+            elif [[ "$STATUS" == "FAILED" || "$STATUS" == "CANCELLED" ]]; then
+              echo "Training job failed or was cancelled!"
+              exit 1
+            fi
+
+            sleep 60  # Wait 1 minute before checking again
+          done
 
       - name: Verify Model File in GCS
         run: |

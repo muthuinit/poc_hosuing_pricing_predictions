@@ -110,6 +110,14 @@ def train_model(df):
 
     return best_model
 
+# Evaluate model
+def evaluate_model(model, X, y):
+    y_pred = model.predict(X)
+    mae = mean_absolute_error(y, y_pred)
+    mse = mean_squared_error(y, y_pred)
+    r2 = r2_score(y, y_pred)
+    logger.info(f"Model Evaluation - MAE: {mae}, MSE: {mse}, R2: {r2}")
+
 # Save model to GCS
 def save_model(model, model_dir):
     # Save the model locally
@@ -129,19 +137,24 @@ def save_model(model, model_dir):
     blob.upload_from_filename(local_model_path)
     logger.info(f"Model saved to GCS: gs://{bucket_name}/{blob_path}")
 
-# Evaluate model
-def evaluate_model(model, X, y):
-    y_pred = model.predict(X)
-    mae = mean_absolute_error(y, y_pred)
-    mse = mean_squared_error(y, y_pred)
-    r2 = r2_score(y, y_pred)
-    logger.info(f"Model Evaluation - MAE: {mae}, MSE: {mse}, R2: {r2}")
-
 # Main function
 def main():
+    # Load the dataset
     df = load_data(args.data_path)
+
+    # Train the model
     model = train_model(df)
-    evaluate_model(model, df[features], df[target])  # Evaluate on the entire dataset
+
+    # Define features and target
+    features = ["log_area", "bedrooms", "bathrooms", "stories", "parking",
+                "mainroad", "guestroom", "basement", "hotwaterheating",
+                "airconditioning", "prefarea", "furnishingstatus"]
+    target = "price"
+
+    # Evaluate the model
+    evaluate_model(model, df[features], df[target])
+
+    # Save the model
     save_model(model, args.model_dir)
 
 if __name__ == "__main__":

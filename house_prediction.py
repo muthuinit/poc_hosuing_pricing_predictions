@@ -53,6 +53,10 @@ def train_model(df):
     lower_bound, upper_bound = Q1 - 1.5 * IQR, Q3 + 1.5 * IQR
     df_cleaned = df[(df["price"] >= lower_bound) & (df["price"] <= upper_bound)].copy()
 
+    # Check if 'area' column exists and has valid values
+    if "area" not in df_cleaned.columns or (df_cleaned["area"] <= 0).any():
+        raise ValueError("The 'area' column is missing or contains invalid values (<= 0).")
+
     # Feature engineering
     df_cleaned["log_area"] = np.log(df_cleaned["area"])
     features = ["log_area", "bedrooms", "bathrooms", "stories", "parking",

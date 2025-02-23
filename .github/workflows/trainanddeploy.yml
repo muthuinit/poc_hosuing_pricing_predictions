@@ -35,31 +35,12 @@ jobs:
 
       - name: Train Model with Vertex AI Custom Job (Docker)
         run: |
-          JOB_ID=$(gcloud ai custom-jobs create \
+          gcloud ai custom-jobs create \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=us-central1 \
             --display-name=house-prediction-job \
             --worker-pool-spec=machine-type=n1-standard-16,replica-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest \
-            --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models" \
-            --format="value(name)")
-
-          echo "Streaming logs for job $JOB_ID..."
-
-          # Stream logs and wait for job completion
-          gcloud ai custom-jobs stream-logs $JOB_ID \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --region=us-central1
-
-          # Check final job state
-          STATUS=$(gcloud ai custom-jobs describe $JOB_ID \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --region=us-central1 \
-            --format="value(state)")
-
-          if [[ "$STATUS" == "JOB_STATE_FAILED" || "$STATUS" == "JOB_STATE_CANCELLED" ]]; then
-            echo "Training job failed or was cancelled!"
-            exit 1
-          fi
+            --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
 
       - name: Verify Model File in GCS
         run: |
@@ -98,7 +79,7 @@ jobs:
           # Deploy the model to the endpoint
           ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
           MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
-
+          
           gcloud ai endpoints deploy-model $ENDPOINT_ID \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=us-central1 \

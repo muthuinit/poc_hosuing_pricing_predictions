@@ -13,7 +13,12 @@ RUN pip install --upgrade pip && \
 
 # Copy the script and dataset
 COPY house_prediction.py .
-COPY Housing.csv .
 
-# Command to run the script
-CMD ["python", "house_prediction.py", "--data_path", "Housing.csv", "--model_dir", "gs://your-bucket-name/path/to/model"]
+# Copy the service account key
+COPY service-account-key.json /app/service-account-key.json
+
+# Set the environment variable for Google Cloud authentication
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
+
+# Set the entry point to run the script
+ENTRYPOINT ["python", "house_prediction.py"]

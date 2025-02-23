@@ -9,30 +9,37 @@ jobs:
   train:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker
+      # Step 2: Set up Docker Buildx
+      - name: Set up Docker Buildx
         id: docker
         uses: docker/setup-buildx-action@v2
 
+      # Step 3: Authenticate to Google Cloud
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
 
+      # Step 4: Set up Google Cloud SDK
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      # Step 5: Authenticate Docker to Google Container Registry (GCR)
       - name: Authenticate Docker to GCR
         run: |
           gcloud auth configure-docker
 
+      # Step 6: Build and Push Docker Image to GCR
       - name: Build and Push Docker Image
         run: |
           docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest .
           docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest
 
+      # Step 7: Run Vertex AI Custom Training Job
       - name: Train Model with Vertex AI Custom Job (Docker)
         run: |
           gcloud ai custom-jobs create \
@@ -42,6 +49,7 @@ jobs:
             --worker-pool-spec=machine-type=n1-standard-16,replica-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/house-prediction-train:latest \
             --args="--data_path=gs://housing-data-bucket-poc/Housing.csv,--model_dir=gs://housing-data-bucket-poc/models"
 
+      # Step 8: Verify Model File in GCS
       - name: Verify Model File in GCS
         run: |
           # Check if the model file exists in GCS

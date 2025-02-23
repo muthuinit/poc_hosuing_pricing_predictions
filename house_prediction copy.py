@@ -66,8 +66,7 @@ def train_model(df):
         "regressor__colsample_bytree": [0.8, 1.0]
     }
 
-    n_splits = min(5, len(df_cleaned))  # Ensure we never have more splits than data points
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
     grid_search = GridSearchCV(pipeline, param_grid, cv=kf, scoring="neg_mean_squared_error", verbose=1)
     grid_search.fit(X, y)
 

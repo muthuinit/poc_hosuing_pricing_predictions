@@ -8,17 +8,20 @@ ENV PYTHONUNBUFFERED=1 \
 # Set the working directory
 WORKDIR /app
 
-# Install system dependencies (if needed for xgboost or GCP libraries)
+# Install system dependencies (needed for libraries like xgboost)
 RUN apt-get update && \
-    apt-get install -y gcc && \
+    apt-get install -y gcc python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file
 COPY requirements.txt .
 
-# Install dependencies
+# Upgrade pip and install dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# Double-check xgboost is installed
+RUN pip show xgboost
 
 # Show Python and package versions for debugging
 RUN python --version && pip freeze

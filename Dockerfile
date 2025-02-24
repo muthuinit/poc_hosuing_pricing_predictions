@@ -26,8 +26,5 @@ RUN python --version && pip freeze
 # Copy the script
 COPY house_prediction.py .
 
-# Ensure the Google credentials are set (optional, based on deployment)
-ENV GOOGLE_APPLICATION_CREDENTIALS=/app/your-service-account-key.json
-
 # Set the entry point to run the script
 ENTRYPOINT ["python", "house_prediction.py"]

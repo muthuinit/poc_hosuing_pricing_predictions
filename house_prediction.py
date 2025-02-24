@@ -27,9 +27,7 @@ args = parser.parse_args()
 def load_data(data_path):
     try:
         if data_path.startswith("gs://"):
-            from google.cloud import storage
             import io
-
             client = storage.Client()
             bucket_name, blob_name = data_path[5:].split("/", 1)
             bucket = client.bucket(bucket_name)
@@ -81,9 +79,9 @@ def train_model(df):
         )
 
         param_grid = {
-            "regressor__n_estimators": [100, 200],
-            "regressor__learning_rate": [0.05, 0.1],
-            "regressor__max_depth": [3, 5],
+            "regressor__n_estimators": [100, 200, 500],
+            "regressor__learning_rate": [0.01, 0.05, 0.1],
+            "regressor__max_depth": [3, 5, 7],
             "regressor__subsample": [0.8, 1.0],
             "regressor__colsample_bytree": [0.8, 1.0]
         }
@@ -110,7 +108,8 @@ def train_model(df):
 # Save model to GCS
 def save_model(model, model_dir):
     try:
-        local_model_path = "model.joblib"
+        local_model_path = "model/0001/model.joblib"
+        os.makedirs("model/0001", exist_ok=True)
         joblib.dump(model, local_model_path, protocol=4)
 
         logger.info(f"Python version: {platform.python_version()}")
@@ -118,13 +117,12 @@ def save_model(model, model_dir):
 
         client = storage.Client()
         bucket_name = model_dir.replace("gs://", "").split("/")[0]
-        destination_blob_path = f"{model_dir}/model.joblib".replace(f"{bucket_name}/", "")
-
+        blob_path = model_dir.replace(f"gs://{bucket_name}/", "") + "/model/0001/model.joblib"
         bucket = client.bucket(bucket_name)
-        blob = bucket.blob(destination_blob_path)
+        blob = bucket.blob(blob_path)
 
         blob.upload_from_filename(local_model_path)
-        logger.info(f"Model successfully uploaded to gs://{bucket_name}/{destination_blob_path}")
+        logger.info(f"Model successfully uploaded to gs://{bucket_name}/{blob_path}")
     except Exception as e:
         logger.error(f"Error saving model: {e}")
         raise

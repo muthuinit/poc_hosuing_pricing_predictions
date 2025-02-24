@@ -3,7 +3,7 @@ name: Deploy Model
 on:
   push:
     branches:
-      - main1
+      - main
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -29,7 +29,7 @@ jobs:
               --region=us-central1 \
               --display-name=house-prediction-model \
               --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest \
-              --artifact-uri=gs://housing-data-bucket-poc/model/0001
+              --artifact-uri=gs://housing-data-bucket-poc/models/model/0001
           fi
 
       - name: Create or Get Vertex AI Endpoint

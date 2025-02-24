@@ -11,6 +11,7 @@ import joblib
 from google.cloud import storage
 import logging
 import os
+import platform
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -37,7 +38,7 @@ def load_data(data_path):
             df = pd.read_csv(io.StringIO(data))
         else:
             df = pd.read_csv(data_path)
-        
+
         df.dropna(inplace=True)
         return df
     except Exception as e:
@@ -87,13 +88,19 @@ def train_model(df):
             "regressor__colsample_bytree": [0.8, 1.0]
         }
 
-        kf = KFold(n_splits=min(5, len(df_cleaned)), shuffle=True, random_state=42)
+        kf = KFold(n_splits=5, shuffle=True, random_state=42)
         grid_search = GridSearchCV(pipeline, param_grid, cv=kf, scoring="neg_mean_squared_error", verbose=1)
         grid_search.fit(X, y)
 
         best_model = grid_search.best_estimator_
         logger.info(f"Best hyperparameters: {grid_search.best_params_}")
         logger.info(f"Best score (neg MSE): {grid_search.best_score_}")
+
+        y_pred = best_model.predict(X)
+        mae = mean_absolute_error(y, y_pred)
+        mse = mean_squared_error(y, y_pred)
+        r2 = r2_score(y, y_pred)
+        logger.info(f"Model Evaluation - MAE: {mae}, MSE: {mse}, R2: {r2}")
 
         return best_model
     except Exception as e:
@@ -103,30 +110,21 @@ def train_model(df):
 # Save model to GCS
 def save_model(model, model_dir):
     try:
-        local_model_path = "model.joblib"
+        local_model_path = "model/0001/model.joblib"
+        os.makedirs("model/0001", exist_ok=True)
         joblib.dump(model, local_model_path, protocol=4)
 
-        if not os.path.exists(local_model_path):
-            raise FileNotFoundError(f"Local model file not found: {local_model_path}")
-        logger.info(f"Model file exists: {local_model_path}, size: {os.path.getsize(local_model_path)} bytes")
+        logger.info(f"Python version: {platform.python_version()}")
+        logger.info(f"joblib version: {joblib.__version__}")
 
         client = storage.Client()
         bucket_name = model_dir.replace("gs://", "").split("/")[0]
-        blob_path = "models/model.joblib"
+        blob_path = "model/0001/model.joblib"
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(blob_path)
 
-        logger.info(f"Attempting to upload: {local_model_path} to gs://{bucket_name}/{blob_path}")
         blob.upload_from_filename(local_model_path)
         logger.info(f"Model successfully uploaded to gs://{bucket_name}/{blob_path}")
-
-        # Manual upload verification step
-        manual_blob = bucket.blob("models/manual-upload-model.joblib")
-        try:
-            manual_blob.upload_from_filename(local_model_path)
-            logger.info("Manual model upload successful!")
-        except Exception as e:
-            logger.error(f"Manual model upload failed: {e}")
     except Exception as e:
         logger.error(f"Error saving model: {e}")
         raise

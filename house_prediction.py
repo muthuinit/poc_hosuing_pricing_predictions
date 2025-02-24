@@ -81,9 +81,9 @@ def train_model(df):
         )
 
         param_grid = {
-            "regressor__n_estimators": [100, 200, 500],
-            "regressor__learning_rate": [0.01, 0.05, 0.1],
-            "regressor__max_depth": [3, 5, 7],
+            "regressor__n_estimators": [100, 200],
+            "regressor__learning_rate": [0.05, 0.1],
+            "regressor__max_depth": [3, 5],
             "regressor__subsample": [0.8, 1.0],
             "regressor__colsample_bytree": [0.8, 1.0]
         }
@@ -110,8 +110,7 @@ def train_model(df):
 # Save model to GCS
 def save_model(model, model_dir):
     try:
-        local_model_path = "model/0001/model.joblib"
-        os.makedirs("model/0001", exist_ok=True)
+        local_model_path = "model.joblib"
         joblib.dump(model, local_model_path, protocol=4)
 
         logger.info(f"Python version: {platform.python_version()}")
@@ -119,12 +118,13 @@ def save_model(model, model_dir):
 
         client = storage.Client()
         bucket_name = model_dir.replace("gs://", "").split("/")[0]
-        blob_path = "model/0001/model.joblib"
+        destination_blob_path = f"{model_dir}/model.joblib".replace(f"{bucket_name}/", "")
+
         bucket = client.bucket(bucket_name)
-        blob = bucket.blob(blob_path)
+        blob = bucket.blob(destination_blob_path)
 
         blob.upload_from_filename(local_model_path)
-        logger.info(f"Model successfully uploaded to gs://{bucket_name}/{blob_path}")
+        logger.info(f"Model successfully uploaded to gs://{bucket_name}/{destination_blob_path}")
     except Exception as e:
         logger.error(f"Error saving model: {e}")
         raise

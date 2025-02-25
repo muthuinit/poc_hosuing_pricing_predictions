@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - test
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -12,30 +13,29 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
       - name: Upload Model to Vertex AI
         run: |
-          # Upload the model to Vertex AI
           MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
           if [ -z "$MODEL_ID" ]; then
             gcloud ai models upload \
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --region=us-central1 \
               --display-name=house-prediction-model \
-              --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest \
+              --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest \
               --artifact-uri=gs://housing-data-bucket-poc/models/model/0001
           fi
 
       - name: Create or Get Vertex AI Endpoint
         run: |
-          # Create or get the endpoint
           ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
           if [ -z "$ENDPOINT_ID" ]; then
             gcloud ai endpoints create \
@@ -46,10 +46,9 @@ jobs:
 
       - name: Deploy Model to Vertex AI Endpoint
         run: |
-          # Deploy the model to the endpoint
           ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
           MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
-          
+
           gcloud ai endpoints deploy-model $ENDPOINT_ID \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=us-central1 \
@@ -61,7 +60,6 @@ jobs:
 
       - name: Test Vertex AI Endpoint
         run: |
-          # Test the endpoint
           ENDPOINT_ID=$(gcloud ai endpoints list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-endpoint --format="value(ENDPOINT_ID)")
           python -c "
           from google.cloud import aiplatform

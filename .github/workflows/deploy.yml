@@ -3,7 +3,7 @@ name: Deploy Model
 on:
   push:
     branches:
-      - main
+      - main1
       - test
 jobs:
   deploy:

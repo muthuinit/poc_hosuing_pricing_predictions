@@ -1,33 +1,28 @@
-# Use a base image with Python 3.9
-FROM python:3.9-slim
+FROM gcr.io/cloud-aiplatform/prediction/xgboost-cpu.1-7:latest
 
-# Set environment variables to avoid Python buffer issues
+# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies (needed for libraries like xgboost)
+# Install system dependencies (if needed)
 RUN apt-get update && \
-    apt-get install -y gcc python3-dev && \
+    apt-get install -y --no-install-recommends gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file
+# Copy requirements file and install dependencies
 COPY requirements.txt .
-
-# Upgrade pip and install dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Double-check xgboost is installed
-RUN pip show xgboost
-
-# Show Python and package versions for debugging
-RUN python --version && pip freeze
-
-# Copy the script
+# Copy the prediction script
 COPY house_prediction.py .
 
-# Set the entry point to run the script
+# Ensure the service account is used without a JSON key
+# Assuming the environment already has proper permissions
+ENV GOOGLE_APPLICATION_CREDENTIALS=""
+
+# Run the script
 ENTRYPOINT ["python", "house_prediction.py"]

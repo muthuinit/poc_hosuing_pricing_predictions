@@ -9,28 +9,33 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for Workload Identity Federation
+      contents: read
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Authenticate to Google Cloud (Workload Identity Federation)
+      - name: Authenticate to Google Cloud using Workload Identity Federation
         uses: google-github-actions/auth@v1
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
       - name: Upload Model to Vertex AI
         run: |
+          # Upload the model to Vertex AI if it doesn’t exist
           MODEL_ID=$(gcloud ai models list --project=${{ secrets.GCP_PROJECT_ID }} --region=us-central1 --filter=display_name:house-prediction-model --format="value(MODEL_ID)")
           if [ -z "$MODEL_ID" ]; then
             gcloud ai models upload \
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --region=us-central1 \
               --display-name=house-prediction-model \
-              --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest \
+              --container-image-uri=gcr.io/cloud-aiplatform/prediction/xgboost-cpu.1-7:latest \
               --artifact-uri=gs://housing-data-bucket-poc/models/model/0001
           fi
 
